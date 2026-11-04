@@ -44,6 +44,10 @@
   .btn-primary { @apply bg-stone-900 text-white ring-stone-900 hover:bg-stone-700; }
   .btn-danger { @apply hover:bg-rose-50 hover:text-rose-700 hover:ring-rose-300; }
   .btn-sm { @apply min-h-10 px-4 text-base; }
+  .btn-icon {
+    @apply inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-stone-700 ring-1
+      ring-stone-300 transition hover:bg-stone-100 hover:text-stone-900 active:scale-[.95];
+  }
 
   .input {
     @apply min-h-12 w-full min-w-0 rounded-2xl bg-white px-4 text-lg text-stone-900 ring-1 ring-stone-300 transition

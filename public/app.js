@@ -96,6 +96,16 @@ function h(tag, props, ...children) {
   return el;
 }
 
+// Inline SVG icons (Lucide paths), drawn in currentColor.
+const ICON_EDIT = '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>';
+const ICON_SHARE = '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>';
+
+function icon(paths) {
+  const span = h("span", { class: "inline-flex", "aria-hidden": "true" });
+  span.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  return span;
+}
+
 async function api(method, path, body) {
   const res = await fetch(`/api${path}`, {
     method,
@@ -578,19 +588,23 @@ function renderPlan() {
     plan.description && h("p", { class: "mt-3 max-w-prose text-lg whitespace-pre-line text-stone-700" }, plan.description),
     h("div", { class: "no-print mt-3 flex flex-wrap items-center gap-3 text-base text-stone-500" },
       t("created", fmtWhen(plan.createdAt)),
-      h("button", { class: "btn btn-sm", onclick: () => editDetails(plan) }, t("editDetails")),
-      h("button", {
-        class: "btn btn-sm",
-        onclick: async () => {
-          const link = `${location.origin}/#/plan/${plan.id}`;
-          try {
-            await navigator.clipboard.writeText(link);
-            toast(t("linkCopied"));
-          } catch {
-            prompt(t("copyThisLink"), link);
-          }
-        },
-      }, t("copyLink")),
+      h("div", { class: "ml-auto flex gap-2" },
+        h("button", { class: "btn-icon", title: t("editDetails"), "aria-label": t("editDetails"), onclick: () => editDetails(plan) }, icon(ICON_EDIT)),
+        h("button", {
+          class: "btn-icon",
+          title: t("copyLink"),
+          "aria-label": t("copyLink"),
+          onclick: async () => {
+            const link = `${location.origin}/#/plan/${plan.id}`;
+            try {
+              await navigator.clipboard.writeText(link);
+              toast(t("linkCopied"));
+            } catch {
+              prompt(t("copyThisLink"), link);
+            }
+          },
+        }, icon(ICON_SHARE)),
+      ),
     ),
     h("nav", { class: "no-print mt-6 mb-8 flex gap-1 rounded-full max-[379px]:gap-0 max-[379px]:p-1 bg-stone-200/70 p-1.5" },
       TABS.map((key) =>
