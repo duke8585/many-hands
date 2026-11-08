@@ -3,7 +3,7 @@
 ## Cloudflare setup
 
 ```
-browser ──► Worker "many-hands" (many-hands.egregore85.workers.dev)
+browser ──► Worker "many-hands" (many-hands.egregore.fyi, also many-hands.egregore85.workers.dev)
               ├─ /api/*      → src/worker.js (JSON API) ──► D1 "shift-planner-db"
               └─ everything else → static assets from public/ (ASSETS binding)
 ```
@@ -44,6 +44,7 @@ Deploy: `npm run db:migrate:remote` (only if `migrations/` changed), then `npm r
 
 - Renaming a Worker = deploying under a new `name`: it creates a second Worker with a new URL; the old one keeps running until deleted. Both can share the same D1.
 
+- Adding `routes` (e.g. a custom domain) silently turns off the workers.dev URL and preview URLs on the next deploy. Keep `workers_dev = true` and `preview_urls = true` in `wrangler.toml` or old links 404.
 - Changing the workers.dev subdomain: no wrangler command, and the API can't rename in place. Use `DELETE` then `PUT /accounts/:id/workers/subdomain`, then redeploy. All old links die, and the new TLS cert can take a few minutes.
 - Cloudflare's bot protection blocks the default `Python-urllib` user agent (error 1010). Set a user agent in scripts.
 - Right after a deploy, the edge can serve the old asset for a few seconds.

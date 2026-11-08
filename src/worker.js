@@ -21,7 +21,14 @@ class HttpError extends Error {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
+    if (!url.pathname.startsWith("/api/")) {
+      // Old links keep working but move to the custom domain, so new share links use it too.
+      // 302, not 301: browsers cache 301s forever, which would make a later domain change sticky.
+      if (env.LEGACY_HOST && url.hostname === env.LEGACY_HOST) {
+        return Response.redirect(`${env.CANONICAL_ORIGIN}${url.pathname}${url.search}`, 302);
+      }
+      return env.ASSETS.fetch(request);
+    }
     appVersion = env.CF_VERSION_METADATA?.id || "";
     try {
       return await route(request, env.DB, url.pathname.slice(4).split("/").filter(Boolean));

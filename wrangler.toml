@@ -2,6 +2,17 @@ name = "many-hands"
 main = "src/worker.js"
 compatibility_date = "2026-10-01"
 
+# Custom domain on the egregore.fyi zone (same account); DNS record + cert are managed by Cloudflare.
+routes = [{ pattern = "many-hands.egregore.fyi", custom_domain = true }]
+# Adding routes turns workers.dev and preview URLs off by default; keep both on so old links work.
+workers_dev = true
+preview_urls = true
+
+[vars]
+# Page loads on the old workers.dev host are redirected here (the #/plan/... part survives redirects).
+CANONICAL_ORIGIN = "https://many-hands.egregore.fyi"
+LEGACY_HOST = "many-hands.egregore85.workers.dev"
+
 # Builds public/styles.css (Tailwind) and copies the self-hosted font before dev/deploy.
 [build]
 command = "npm run build"
@@ -22,4 +33,4 @@ database_id = "c4d9e25d-2145-4444-97e5-f4b9b69527d6"
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*"]
+run_worker_first = ["/", "/api/*"] # "/" so page loads on the old host can be redirected
