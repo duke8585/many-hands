@@ -77,6 +77,10 @@
 @keyframes nudge { 25% { translate: -6px 0; } 75% { translate: 6px 0; } }
 @keyframes rise { from { opacity: 0; translate: 0 12px; } }
 .nudge { animation: nudge .35s; }
+@keyframes flash { from { background-color: var(--color-amber-200); } }
+/* builder row edited but not yet sorted into place ("Done") */
+.row-pending { background-color: var(--color-amber-50) !important; box-shadow: inset 4px 0 0 var(--color-amber-400); }
+.row-flash { animation: flash 1.6s ease-out; }
 .toast-in { animation: rise .2s ease-out; }
 
 .hatch { background: repeating-linear-gradient(45deg, #fafaf9, #fafaf9 6px, #f5f5f4 6px, #f5f5f4 12px); }

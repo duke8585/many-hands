@@ -18,7 +18,7 @@ const ROLE_PALETTE = [
 ];
 
 // Desktop column layout of the builder (header + rows); phones stack each row as a card.
-const BUILDER_COLS = "sm:grid-cols-[minmax(9rem,1.4fr)_minmax(9rem,1fr)_6.5rem_6.5rem_4.5rem_5.5rem_auto]";
+const BUILDER_COLS = "sm:grid-cols-[minmax(9rem,1.4fr)_minmax(9rem,1fr)_6.5rem_6.5rem_4.5rem_7rem_auto]";
 
 const state = {
   planId: null,
@@ -184,10 +184,22 @@ function hash(text) {
   return x;
 }
 
-// Roles get palette colors in order of first appearance (= builder row order), so the first
-// few roles in a plan are always clearly distinct. Duplicated plans keep the same colors.
+// One order everywhere: roles A to Z, shifts by date, start time, then role.
+function compareRoles(a, b) {
+  return a.localeCompare(b, locale(), { sensitivity: "base", numeric: true });
+}
+
+function compareShifts(a, b) {
+  return (a.date || "").localeCompare(b.date || "") || (a.startTime || "").localeCompare(b.startTime || "") || compareRoles((a.role || "").trim(), (b.role || "").trim());
+}
+
+function sortedRoles(roles) {
+  return [...new Set(roles)].sort(compareRoles);
+}
+
+// Roles get palette colors in column order (A to Z), so neighbouring columns always contrast.
 function computeRoleColors(roles) {
-  return new Map([...new Set(roles)].map((role, i) => [role, ROLE_PALETTE[i % ROLE_PALETTE.length]]));
+  return new Map(sortedRoles(roles).map((role, i) => [role, ROLE_PALETTE[i % ROLE_PALETTE.length]]));
 }
 
 function roleStyle(role, colors = state.roleColors) {
@@ -629,11 +641,10 @@ function renderPlan() {
 // ---------- shared bits ----------
 
 function gridModel(shifts) {
-  const roles = [];
+  const roles = sortedRoles(shifts.map((s) => s.role));
   const slots = new Map(); // "date|time" -> { date, time }
   const byKey = new Map();
   for (const s of shifts) {
-    if (!roles.includes(s.role)) roles.push(s.role);
     slots.set(`${s.date}|${s.startTime}`, { date: s.date, time: s.startTime });
     const key = `${s.role}|${s.date}|${s.startTime}`;
     if (!byKey.has(key)) byKey.set(key, s);
@@ -707,11 +718,8 @@ function renderSignupList() {
   const isFull = (s) => byShift.get(s.id).length >= s.capacity;
   const openIn = (list) => list.reduce((n, s) => n + Math.max(0, s.capacity - byShift.get(s.id).length), 0);
 
-  // date -> start time -> shifts, roles in builder order
-  const { roles } = gridModel(shifts);
-  const ordered = [...shifts].sort(
-    (a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime) || roles.indexOf(a.role) - roles.indexOf(b.role),
-  );
+  // date -> start time -> shifts, roles A to Z
+  const ordered = [...shifts].sort(compareShifts);
   const days = new Map();
   for (const s of ordered) {
     if (!days.has(s.date)) days.set(s.date, new Map());
@@ -986,7 +994,20 @@ function layoutFields({ id, role, date, startTime, endTime, capacity }) {
 
 function openBuilder() {
   state.unlocked = true;
-  state.rows = state.data.shifts.map(layoutFields);
+  state.rows = state.data.shifts.map(layoutFields).sort(compareShifts);
+}
+
+// Sorts all rows into place and clears their "being edited" mark. `focus` (a row) is
+// scrolled to and flashed afterwards, so it is easy to see where it went.
+function sortRows(redraw, focus) {
+  state.rows.sort(compareShifts);
+  for (const r of state.rows) r.pending = false;
+  redraw();
+  if (!focus) return;
+  const el = document.querySelector(`[data-row="${state.rows.indexOf(focus)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  el.classList.add("row-flash");
 }
 
 function renderBuilder() {
@@ -1028,8 +1049,11 @@ function renderBuilder() {
         class: "btn",
         onclick: () => {
           const last = state.rows[state.rows.length - 1];
-          state.rows.push(last ? { ...last, id: undefined } : { role: "", date: "", startTime: "", endTime: "", capacity: 1 });
+          state.rows.push({ ...(last ? { ...last, id: undefined } : { role: "", date: "", startTime: "", endTime: "", capacity: 1 }), dupe: false, pending: true });
           redraw();
+          const el = list.lastElementChild;
+          el?.scrollIntoView({ block: "center" });
+          el?.querySelector("input")?.focus();
         },
       }, t("addRow")),
     ),
@@ -1043,20 +1067,42 @@ function builderRow(row, i, redraw, colors) {
       h("span", { class: "sm:hidden" }, label),
       input,
     );
+  // Editing marks the row "pending": it stays put and shows "Done" until confirmed.
+  const touch = (e) => {
+    if (row.pending) return;
+    row.pending = true;
+    const el = e.target.closest("[data-row]");
+    el.classList.add("row-pending");
+    el.querySelector(".row-done").hidden = false;
+    el.querySelector(".row-count").hidden = true;
+  };
+  const done = () => sortRows(redraw, row);
+  const onkeydown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      done();
+    }
+  };
   const bind = (key, { label, ...props }) =>
     h("input", {
       class: "input min-h-11 px-3 text-base",
       "aria-label": label,
       ...props,
       value: row[key] ?? "",
-      oninput: (e) => (row[key] = props.type === "number" ? Number(e.target.value) : e.target.value),
+      onkeydown,
+      oninput: (e) => {
+        row[key] = props.type === "number" ? Number(e.target.value) : e.target.value;
+        touch(e);
+      },
     });
   const signupCount = row.id ? state.data.signups.filter((u) => u.shiftId === row.id).length : 0;
   const role = (row.role || "").trim();
   return h("div", {
     class: `grid grid-cols-2 items-end gap-x-2 gap-y-3 rounded-3xl p-4 ring-1 sm:items-center sm:gap-y-0 sm:rounded-none sm:border-t sm:border-stone-100 sm:px-4 sm:py-2 sm:shadow-none sm:ring-0 ${BUILDER_COLS} ${
-      row.dupe ? "bg-rose-50 ring-rose-300" : "bg-white shadow-sm ring-stone-200/80"}`,
+      row.dupe ? "bg-rose-50 ring-rose-300" : "bg-white shadow-sm ring-stone-200/80"}${row.pending ? " row-pending" : ""}`,
     style: role ? roleStyle(role, colors) : null,
+    "data-row": i,
+    onanimationend: (e) => e.currentTarget.classList.remove("row-flash"),
   },
     h("div", { class: "col-span-2 flex items-center gap-2.5 sm:col-span-1" },
       h("span", { class: role ? "size-3.5 flex-none rounded-full bg-(--role)" : "size-3.5 flex-none rounded-full bg-stone-200", "aria-hidden": "true" }),
@@ -1066,15 +1112,22 @@ function builderRow(row, i, redraw, colors) {
         "aria-label": t("colRole"),
         maxlength: 100,
         value: row.role ?? "",
-        oninput: (e) => (row.role = e.target.value),
-        onchange: redraw, // recolor once the name is final
+        onkeydown,
+        oninput: (e) => {
+          row.role = e.target.value;
+          touch(e);
+        },
       }),
     ),
     field(t("colDate"), "col-span-2", bind("date", { type: "date", label: t("colDate") })),
     field(t("colStart"), "col-span-1", bind("startTime", { type: "time", label: t("colStart") })),
     field(t("colEnd"), "col-span-1", bind("endTime", { type: "time", label: t("colEndOptional") })),
     field(t("colSpots"), "col-span-1", bind("capacity", { type: "number", min: 1, max: 1000, label: t("colSpots") })),
-    h("div", { class: "self-center text-sm font-semibold text-stone-500 max-sm:pt-5" }, signupCount ? t("signedUpCount", signupCount) : ""),
+    // "Done" takes the sign-up count's place while the row is being edited, so columns never shift
+    h("div", { class: "self-center text-sm font-semibold text-stone-500 max-sm:pt-5" },
+      h("span", { class: "row-count", hidden: row.pending }, signupCount ? t("signedUpCount", signupCount) : ""),
+      h("button", { class: "row-done btn btn-sm btn-primary px-3 whitespace-nowrap", hidden: !row.pending, title: t("rowDoneHint"), onclick: done }, t("rowDone")),
+    ),
     h("div", { class: "col-span-2 sm:col-span-1" },
       h("div", { class: "flex justify-end gap-1.5" },
         h("button", {
@@ -1082,8 +1135,9 @@ function builderRow(row, i, redraw, colors) {
           title: t("dupRow"),
           "aria-label": t("dupRow"),
           onclick: () => {
-            state.rows.splice(i + 1, 0, { ...row, id: undefined, dupe: false });
+            state.rows.splice(i + 1, 0, { ...row, id: undefined, dupe: false, pending: true });
             redraw();
+            document.querySelector(`[data-row="${i + 1}"] input`)?.focus();
           },
         }, "⧉"),
         h("button", {
@@ -1139,7 +1193,7 @@ function quickGenerate(redraw) {
     for (const date of dates) {
       for (const [startTime, endTime] of times) state.rows.push({ role, date, startTime, endTime, capacity: cap });
     }
-    redraw();
+    sortRows(redraw);
     toast(t("qgAdded", count, dates.length, times.length));
   };
 
@@ -1163,7 +1217,8 @@ function quickGenerate(redraw) {
 }
 
 async function saveLayout() {
-  const rows = state.rows;
+  const rows = state.rows.sort(compareShifts);
+  for (const r of rows) r.pending = false;
   const seen = new Map();
   let dupes = 0;
   rows.forEach((r, i) => {

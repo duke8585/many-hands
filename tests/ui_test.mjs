@@ -67,9 +67,12 @@ try {
   const { id: planId } = await api("POST", "/plans", { name: "UI test plan" });
   created.push(planId);
   await api("PUT", `/plans/${planId}/shifts`, {
+    // saved out of order on purpose: every view must show date, time, role A to Z
     shifts: [
-      { role: "Bar", date: "2026-12-05", startTime: "14:00", endTime: "16:00", capacity: 2 },
       { role: "Grill", date: "2026-12-05", startTime: "14:00", capacity: 1 },
+      { role: "Kasse", date: "2026-12-06", startTime: "10:00", capacity: 1 },
+      { role: "Bar", date: "2026-12-05", startTime: "16:00", capacity: 1 },
+      { role: "Bar", date: "2026-12-05", startTime: "14:00", endTime: "16:00", capacity: 2 },
     ],
   });
   const { id: archivedId } = await api("POST", "/plans", { name: "UI test archived" });
@@ -124,7 +127,39 @@ try {
     width: 1280,
     script: `return [...document.querySelectorAll("thead th")].slice(1).map(th=>({text:th.textContent,chips:th.querySelectorAll("span").length}));`,
   });
-  check("overview headers = role names", overview.map((o) => o.text).join() === "Bar,Grill" && overview.every((o) => !o.chips), overview);
+  check("overview headers = role names A to Z", overview.map((o) => o.text).join() === "Bar,Grill,Kasse" && overview.every((o) => !o.chips), overview);
+
+  // sign-up list: date, time, role A to Z
+  const signupOrder = await inPage(send, {
+    url: `${BASE}/#/plan/${planId}/signup`,
+    width: 1280,
+    script: `return [...document.querySelectorAll("main li h3")].map(h=>h.firstChild.textContent.trim());`,
+  });
+  check("sign-up list sorted by date, time, role", signupOrder.join() === "Bar,Grill,Bar,Kasse", signupOrder);
+
+  // builder: sorted on open; an edited row stays put until "Done", then sorts into place
+  const builder = await inPage(send, {
+    url: `${BASE}/#/plan/${planId}/builder`,
+    width: 1280,
+    script: `const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+      window.confirm=()=>true;
+      [...document.querySelectorAll("main button")].find(b=>b.textContent==="Schichten bearbeiten"||b.textContent==="Edit layout")?.click();
+      await wait(300);
+      const rows=()=>[...document.querySelectorAll("[data-row]")].map(r=>r.querySelector("input").value+" "+r.querySelectorAll("input")[2].value);
+      const opened=rows();
+      const first=document.querySelector('[data-row="0"]');
+      const start=first.querySelectorAll("input")[2];
+      start.value="18:00"; start.dispatchEvent(new Event("input",{bubbles:true}));
+      const doneBtn=first.querySelector(".row-done");
+      const pending={stays:rows()[0],done:!doneBtn.hidden,marked:first.classList.contains("row-pending")};
+      doneBtn.click(); await wait(100);
+      const after=rows();
+      const moved=document.querySelector('[data-row="2"]');
+      return {opened,pending,after,flash:moved.classList.contains("row-flash"),doneLeft:document.querySelectorAll(".row-done:not([hidden])").length};`,
+  });
+  check("builder sorted on open", builder.opened.join() === "Bar 14:00,Grill 14:00,Bar 16:00,Kasse 10:00", builder);
+  check("edited row stays put and shows Done", builder.pending.stays === "Bar 18:00" && builder.pending.done && builder.pending.marked, builder);
+  check("Done sorts row into place and flashes it", builder.after.join() === "Grill 14:00,Bar 16:00,Bar 18:00,Kasse 10:00" && builder.flash && !builder.doneLeft, builder);
 
   ws.close();
 } catch (err) {

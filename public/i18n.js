@@ -118,6 +118,8 @@ const STRINGS = {
     signedUpCount: (n) => `${n} signed up`,
     dupRow: "Duplicate row",
     delRow: "Delete row",
+    rowDone: "✓ Done",
+    rowDoneHint: "Done editing: sort this row into place (or press Enter)",
     rolePh: "e.g. Bar",
 
     qg: "⚡ Quick generate",
@@ -286,6 +288,8 @@ const STRINGS = {
     signedUpCount: (n) => `${n} eingetragen`,
     dupRow: "Zeile kopieren",
     delRow: "Zeile löschen",
+    rowDone: "✓ Fertig",
+    rowDoneHint: "Fertig bearbeitet: Zeile einsortieren (oder Enter drücken)",
     rolePh: "z. B. Bar",
 
     qg: "⚡ Schnell anlegen",
